@@ -85,10 +85,19 @@ void addDistrict(int report_file, char user[]) {
 	getchar();
 	fgets(report.description, sizeof(report.description), stdin);
 
-	report.id = 1;
+	off_t offset = lseek(report_file, -sizeof(Report), SEEK_END);
+	if(offset == -1) {
+		report.id = 1;
+	} else {
+		Report last;
+		read(report_file, &last, sizeof(Report));
+		report.id = last.id + 1;
+	}
+	
 	strcpy(report.user, user);
 	report.timestamp = time(NULL);
 
+	lseek(report_file, 0, SEEK_END);
 	write(report_file, &report, sizeof(report));
 }
 
