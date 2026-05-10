@@ -2,12 +2,13 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <sys/stat.h>
 
-#define nrc 7
+#define nrc 8 
 
 struct stat st = {0};
 
@@ -49,7 +50,7 @@ int openFile( char name[], char path[]) {
 	return id;
 }
 
-void makeDir(char district[], char path[]) {
+void makeDir(char district[], char *path) {
 	strcpy(path, "../districts/");
        	strcat(path, district);
 	strcat(path, "/");	
@@ -69,7 +70,17 @@ char *checkRole(int argc, char argv[]) {
 	return NULL;
 }
 
-void addDistrict(int report_file, char user[]) {
+void printReport(Report report) {
+	printf("%i\n", report.id);
+	printf("%s\n", report.user);
+	printf("%f %f\n", report.x, report.y);
+	printf("%s\n", report.category);
+	printf("%i\n", report.level);
+	printf("%s", ctime(&report.timestamp));
+	printf("%s\n\n", report.description);
+}
+
+void addDistrict(int report_file, int log_file, char user[]) {
 	Report report;
 
 	printf("Creating report: \n");
@@ -99,14 +110,109 @@ void addDistrict(int report_file, char user[]) {
 
 	lseek(report_file, 0, SEEK_END);
 	write(report_file, &report, sizeof(report));
+	
+	char *msg = "Added report\n";
+	write(log_file, msg, strlen(msg));
 }
 
-void view(){;}
-void removeDistrict(){;}
-void updateThreshold(){;}
-void filter(){;}
+void view(int argc, char **argv, int report_file, int log_file) {
+	fstat(report_file, &st);
+	
+	int id = atoi(argv[argc - 1]);
+	Report report;
 
-void list(int report_file) {
+	while(read(report_file, &report, sizeof(report)) == sizeof(Report)) {
+		if(report.id == id)
+			break;
+	}
+
+	printReport(report);
+	char *msg = "Viewed report\n";
+	write(log_file, msg, strlen(msg));
+}
+
+void removeDistrict(int argc, char **argv, int report_file, int log_file, char *path) {
+	fstat(report_file, &st);
+
+	Report rp;
+	long replace = -1;
+
+	int id = atoi(argv[argc - 1]);
+	if(id <= 0) {
+		printf("eror on id\n");
+		return;
+	}
+
+	while(read(report_file, &rp, sizeof(rp)) == sizeof(Report)) {
+		if(rp.id == id) {
+			replace = lseek(report_file, -sizeof(Report), SEEK_CUR) ;
+			printf("%ld\n", replace);
+			break;
+		}
+	}
+
+	printf("%ld\n", replace);
+
+	if(replace != -1) {
+		Report next;
+		long sread = replace + sizeof(Report);
+	       	long swrite = replace;
+		
+
+		while(sread < st.st_size) {
+			lseek(report_file, sread, SEEK_SET);
+			printf("%ld\n", sread);
+			printf("%ld\n", swrite);
+
+
+
+			if(read(report_file, &next, sizeof(Report)) != sizeof(Report)) 
+				return;
+
+			lseek(report_file, swrite, SEEK_SET);
+			write(report_file, &next, sizeof(Report));
+
+			sread += sizeof(Report);
+			swrite += sizeof(Report);
+		}
+
+		ftruncate(report_file, st.st_size - sizeof(Report));
+	}
+
+
+	char *str = "Tried removing report and failed";
+	write(log_file, str, strlen(str));
+	printf("Error removing report\n");	
+}
+
+
+void updateThreshold(){;}
+void filter(int argc, char **argv, char district[]) {
+	int i = argc;
+	int severity = 0;
+	time_t time = 0;
+	char user[20] = "";
+	char category[20] = "";
+
+	printf("%s\n", district);
+	while(strcmp(district, argv[--i]) != 0) {
+		printf("%s\n", argv[i]);
+
+	}
+}
+
+void removeAllDistricts(char district[]) {
+	char path[100] = "../districts/";
+	strcat(path, district);
+
+	char removes[120];
+	strcpy(removes, "rm -drf ");
+	strcat(removes, path);
+
+	system(removes);
+}
+
+void list(int report_file, int log_file) {
 	fstat(report_file, &st);
 	char out[10];
 
@@ -128,14 +234,11 @@ void list(int report_file) {
 
 	Report report;
 	while(read(report_file, &report, sizeof(report)) == sizeof(Report)) {
-		printf("%i\n", report.id);
-		printf("%s\n", report.user);
-		printf("%f %f\n", report.x, report.y);
-		printf("%s\n", report.category);
-		printf("%i\n", report.level);
-		printf("%s", ctime(&report.timestamp));
-		printf("%s\n\n", report.description);
+		printReport(report);
 	}
+	
+	char *msg = "Listed all reports\n";
+	write(log_file, msg, strlen(msg));
 }
 
 int checkFilePermission(int id, char role[], int r_id) {
@@ -160,19 +263,21 @@ int checkFilePermission(int id, char role[], int r_id) {
 	return 0;
 }
 
-void chooseCommand(char command[], int report_file, char user[]) {
+void chooseCommand(int argc, char **argv, char district[], char command[], int report_file, int log_file, char user[], char *path)  {
 	if(!strcmp("--add", command))
-		addDistrict(report_file, user);
+		addDistrict(report_file, log_file, user);
 	else if(!strcmp("--list", command))
-		list(report_file);
+		list(report_file, log_file);
 	else if(!strcmp("--remove", command))
-		removeDistrict();
+		removeDistrict(argc, argv, report_file, log_file, path);
 	else if(!strcmp("--view", command))
-		view();
+		view(argc, argv, report_file, log_file);
 	else if(!strcmp("--update", command))
 		updateThreshold();
 	else if(!strcmp("--filter", command))
-		filter();
+		filter(argc, argv, district);
+	else if(!strcmp("--remove_district", command))
+		removeAllDistricts(district);
 	else printf("Command Error\n");
 }
 
@@ -189,7 +294,7 @@ int main(int argc, char **argv) {
 	}
 	
 	char district[32];
-	char commands[nrc][16] = {"--list", "--add", "--remove", "--filter", "--view", "--update"};
+	char commands[nrc][32] = {"--list", "--remove_district", "--add", "--remove", "--filter", "--view", "--update"};
 	char command[16];
 	char user[20] = "noname";
 
@@ -215,7 +320,10 @@ int main(int argc, char **argv) {
 			}
 	}
 
-	char path[100];
+	printf("%s\n", command);
+	
+
+	char *path = malloc(sizeof(char) * 100);
 	makeDir(district, path);
 
 	int log_file = openFile("log", path);
@@ -235,13 +343,15 @@ int main(int argc, char **argv) {
 		return 4;
 	}
 	
-	chooseCommand(command, report_file, user);
+	chooseCommand(argc, argv, district, command, report_file, log_file, user, path);
 
 
 
 	close(report_file);
 	close(district_file);
 	close(log_file);
+	free(path);
+
 	printf("DONE\n");
 	return 0;
 }
