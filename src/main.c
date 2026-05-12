@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <string.h>
 #include <dirent.h>
 #include <unistd.h>
@@ -320,9 +321,6 @@ int main(int argc, char **argv) {
 			}
 	}
 
-	printf("%s\n", command);
-	
-
 	char *path = malloc(sizeof(char) * 100);
 	makeDir(district, path);
 
@@ -342,7 +340,24 @@ int main(int argc, char **argv) {
 		printf("Role doesn t have permission to access file\n");
 		return 4;
 	}
-	
+
+	char *pidPath = "../.monitor.pid";
+	int pid;
+	if(stat(pidPath, &st) == 0) {
+		if((pid = open(pidPath, O_RDONLY)) < 0) {
+			printf("error pid file\n");
+			return 1;
+		}
+	}
+
+	char pidb[16];
+	ssize_t n = read(pid, pidb, sizeof(pidb) - 1);
+	pidb[n] = '\0';
+
+	pid_t pidid = (pid_t)strtol(pidb, NULL, 15);
+
+	kill(pidid, SIGUSR1);
+
 	chooseCommand(argc, argv, district, command, report_file, log_file, user, path);
 
 

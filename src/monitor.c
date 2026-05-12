@@ -14,6 +14,10 @@ void sigHandle() {
 	run = 0;
 }
 
+void sigusr(int sig) {
+	if(sig == SIGUSR1) 
+		printf("received sigusr1\n");
+}
 
 int main(int argc, char **argv) {
 	char *path = "../.monitor.pid";
@@ -40,10 +44,11 @@ int main(int argc, char **argv) {
 	sprintf(id, "%d", getpid());
 	write(file, id, strlen(id));
 
-	signal(SIGINT, sigHandle);
 
 	while(run) {
-
+		if(signal(SIGUSR1, sigusr) == SIG_ERR)
+			printf("Error sigusr1\n");
+		
 	}	
 	remove(path);
 	close(file);
