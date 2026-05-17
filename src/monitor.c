@@ -20,38 +20,35 @@ void sigusr(int sig) {
 }
 
 int main(int argc, char **argv) {
-	char *path = "../.monitor.pid";
-
+	int fd;
 	pid_t pid = getpid();
-	printf("%d\n", pid);
+	char *pid_path = "../.monitor_pid";
 
-	int file;
-	if(stat(path, &st) == 0) {
-		if((file = open(path, O_CREAT | O_RDWR, 0744)) < 0) {
-			printf("error file\n");
-			return 1;
-		}
+	setvbuf(stdout, NULL, _IONBF, 0);
+
+	if(stat(pid_path, &st) == 0) {
+		printf("An monitor already exists\nMonitor closed");
+		exit(EXIT_FAILURE);
 	} else {
-		if((file = open(path, O_CREAT | O_RDWR, 0744)) < 0) {
+		if((fd = open(pid_path, O_CREAT | O_RDWR, 0744)) < 0) {
 			printf("error file\n");
 			return 1;
 		}
 
-		fchmod(file, 0744);
+		fchmod(fd, 0744);
 	}
 
-	char id[10];
-	sprintf(id, "%d", getpid());
-	write(file, id, strlen(id));
+	write(fd, &pid, sizeof(pid_t));
+	printf("Monitor created");
 
+	while(1) {	
+		;
+	}
 
-	while(run) {
-		if(signal(SIGUSR1, sigusr) == SIG_ERR)
-			printf("Error sigusr1\n");
-		
-	}	
-	remove(path);
-	close(file);
+	remove(pid_path);
+	close(fd);
 	
-	return 0;
+	printf("Monitor is closed");	
+	
+	exit(EXIT_SUCCESS);
 }
