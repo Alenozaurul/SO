@@ -7,6 +7,7 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 
+struct stat st = {0};
 
 int main(int argc, char **argv) {
 	char command[32];
@@ -37,7 +38,22 @@ int main(int argc, char **argv) {
 			
 			printf("District: ");
 			while( (scanf("%s", district) != EOF ) && (strcmp(district, "exit") != 0) ){
+				char link[64] = "active_reports-";
+				strcat(link, district);
+
+				if(stat(link, &st) < 0) {
+					perror("Cannot find district\n");
+					printf("District: ");	
+					continue;
+				}
+
 				pid_t pid;
+				int pfd[2];
+			
+				if(pipe(pfd) < 0){
+					perror("Pipe error on reading a district\n");
+					exit(EXIT_FAILURE);
+				}
 			
 				if( (pid = fork()) < 0 ) {
 					perror("Fork error in calculate_scores\n");
@@ -45,10 +61,32 @@ int main(int argc, char **argv) {
 				}
 
 				if(pid == 0) {
-					execl("./calculate", "calculate", district, NULL);
+					close(pfd[0]);
+					dup2(pfd[1], STDOUT_FILENO);
+					close(pfd[1]);
+				
+					execl("./scorer", "scorer", link, NULL);
+						
+					perror("Execl failed on calculate_scores\n");
 					exit(1);
-				} else  		
+				} else {
 					wait(NULL);
+					close(pfd[1]);
+
+					char buffer[1024];
+					ssize_t bytes = read(pfd[0], buffer, sizeof(buffer) - 1);
+					if(bytes > 0) { 
+						buffer[bytes] = '\0';
+						printf("%s", buffer);
+					} else if(bytes == -1) {
+						perror("Couldn't read from scorer");
+						break;
+					} else if(bytes == 0) {
+						break;
+					}
+
+					close(pfd[0]);
+				}
 
 				printf("District: ");	
 			} 
