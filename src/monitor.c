@@ -6,20 +6,41 @@
 #include <sys/stat.h>
 #include <string.h>
 
-static volatile int run = 1;
+static volatile char *pth = NULL;
+static volatile int pfd = -1;
+
 struct stat st = {0};
 
-void sigHandle() {
-	printf("\nClosing monitor...\n");
-	run = 0;
+void sigintHandler(int sig) {
+	if(pth != NULL)
+		remove((const char *)pth);
+	if(pfd > 0)
+		close(pfd);
+	
+	printf("Monitor is closed\n");
+	exit(EXIT_SUCCESS);	
 }
 
-void sigusr(int sig) {
-	if(sig == SIGUSR1) 
-		printf("received sigusr1\n");
+void sigusrHandler(int sig) {
+	printf("A report has been added\n");
 }
 
 int main(int argc, char **argv) {
+
+	struct sigaction sa = {0};
+
+	sa.sa_handler = sigintHandler;
+	if(sigaction(SIGINT, &sa, NULL) == -1) {
+		perror("Error on SIGINT\n");
+		exit(EXIT_FAILURE);
+	}
+
+	sa.sa_handler = sigusrHandler;
+	if(sigaction(SIGUSR1, &sa, NULL) == -1) {
+		perror("Error on SIGUSR1\n");
+		exit(EXIT_FAILURE);
+	}
+
 	int fd;
 	pid_t pid = getpid();
 	char *pid_path = "../.monitor_pid";
@@ -34,16 +55,20 @@ int main(int argc, char **argv) {
 			printf("error file\n");
 			return 1;
 		}
-
+		
+		pth = pid_path;
+		pfd = fd;
 		fchmod(fd, 0744);
 	}
 
 	write(fd, &pid, sizeof(pid_t));
-	printf("Monitor created");
+	printf("Monitor created\n");
 
 	while(1) {	
-		;
+		sleep(1);
 	}
+
+
 
 	remove(pid_path);
 	close(fd);
